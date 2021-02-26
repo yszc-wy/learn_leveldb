@@ -18,6 +18,7 @@ class Iterator;
 // key is present in K child iterators, it will be yielded K times.
 //
 // REQUIRES: n >= 0
+// childern子迭代器数组
 Iterator* NewMergingIterator(const Comparator* comparator, Iterator** children,
                              int n);
 

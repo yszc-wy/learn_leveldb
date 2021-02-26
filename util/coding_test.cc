@@ -9,7 +9,7 @@
 #include "gtest/gtest.h"
 
 namespace leveldb {
-
+// yszc:google test https://www.jianshu.com/p/65c0c373a2a8
 TEST(Coding, Fixed32) {
   std::string s;
   for (uint32_t v = 0; v < 100000; v++) {

@@ -42,6 +42,7 @@ class Writer {
   WritableFile* dest_;
   int block_offset_;  // Current offset in block
 
+  // 预先计算type的校验和,因为是固定的,可以减少额外的计算负担
   // crc32c values for all supported record types.  These are
   // pre-computed to reduce the overhead of computing the crc of the
   // record type stored in the header.

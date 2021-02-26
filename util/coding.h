@@ -50,8 +50,9 @@ char* EncodeVarint64(char* dst, uint64_t value);
 
 // Lower-level versions of Put... that write directly into a character buffer
 // REQUIRES: dst has enough space for the value being written
-
+// yszc 将dst指针转化为uint8,一个字节一个字节的赋值
 inline void EncodeFixed32(char* dst, uint32_t value) {
+  // yszc reinterpret_cast负责处理无关类型的转化,这个值会有与原始参数（expression）有完全相同的比特位
   uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);
 
   // Recent clang and gcc optimize this to a single mov / str instruction.

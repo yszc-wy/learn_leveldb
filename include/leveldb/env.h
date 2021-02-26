@@ -7,6 +7,7 @@
 // may wish to provide a custom Env object when opening a database to
 // get fine gain control; e.g., to rate limit file system operations.
 //
+// yszc: 几乎每个头文件都包含线程安全的说明
 // All Env implementations are safe for concurrent access from
 // multiple threads without any external synchronization.
 
@@ -48,10 +49,12 @@ class SequentialFile;
 class Slice;
 class WritableFile;
 
+// yszc: Env接口的存在让leveldb可以方便的跨平台访问文件系统,添加文件锁,启动线程,睡眠,无需在意各个系统中系统调用的细节
 class LEVELDB_EXPORT Env {
  public:
   Env();
 
+  // yszc: 对象语义 nocopyable
   Env(const Env&) = delete;
   Env& operator=(const Env&) = delete;
 
@@ -62,8 +65,11 @@ class LEVELDB_EXPORT Env {
   // implementation instead of relying on this default environment.
   //
   // The result of Default() belongs to leveldb and must never be deleted.
+  // yszc: 获取适合当前操作系统的Env对象
   static Env* Default();
 
+  // yszc: 注意,以下函数均为接口(virtual),每个平台都应该有对应的实现
+  // yszc: QUE: 为何是指针的指针
   // Create an object that sequentially reads the file with the specified name.
   // On success, stores a pointer to the new file in *result and returns OK.
   // On failure stores nullptr in *result and returns non-OK.  If the file does
@@ -129,6 +135,7 @@ class LEVELDB_EXPORT Env {
   // RemoveDir.
   virtual Status RemoveFile(const std::string& fname);
 
+  // DeleteFile接口可能和windows.h中的定义重复,所以最好不要使用
   // DEPRECATED: Modern Env implementations should override RemoveFile instead.
   //
   // The default implementation calls RemoveFile, to support legacy Env user
@@ -189,6 +196,7 @@ class LEVELDB_EXPORT Env {
   // REQUIRES: lock has not already been unlocked.
   virtual Status UnlockFile(FileLock* lock) = 0;
 
+  // yszc: 在背景线程中运行指定的函数
   // Arrange to run "(*function)(arg)" once in a background thread.
   //
   // "function" may run in an unspecified thread.  Multiple functions
@@ -210,24 +218,29 @@ class LEVELDB_EXPORT Env {
   // Create and return a log file for storing informational messages.
   virtual Status NewLogger(const std::string& fname, Logger** result) = 0;
 
+  // yszc: 时间函数
   // Returns the number of micro-seconds since some fixed point in time. Only
   // useful for computing deltas of time.
   virtual uint64_t NowMicros() = 0;
 
+  // yszc: 睡眠函数
   // Sleep/delay the thread for the prescribed number of micro-seconds.
   virtual void SleepForMicroseconds(int micros) = 0;
 };
 
+// yszc: 对文件进行序列读取
 // A file abstraction for reading sequentially through a file
 class LEVELDB_EXPORT SequentialFile {
  public:
   SequentialFile() = default;
 
+  // yszc: 对象语义
   SequentialFile(const SequentialFile&) = delete;
   SequentialFile& operator=(const SequentialFile&) = delete;
 
   virtual ~SequentialFile();
 
+  // yszc: QUE: 这里为何传了result又传scratch?
   // Read up to "n" bytes from the file.  "scratch[0..n-1]" may be
   // written by this routine.  Sets "*result" to the data that was
   // read (including if fewer than "n" bytes were successfully read).
@@ -248,6 +261,7 @@ class LEVELDB_EXPORT SequentialFile {
   virtual Status Skip(uint64_t n) = 0;
 };
 
+// yszc: 随机读
 // A file abstraction for randomly reading the contents of a file.
 class LEVELDB_EXPORT RandomAccessFile {
  public:
@@ -271,6 +285,7 @@ class LEVELDB_EXPORT RandomAccessFile {
                       char* scratch) const = 0;
 };
 
+// yszc: 序列写
 // A file abstraction for sequential writing.  The implementation
 // must provide buffering since callers may append small fragments
 // at a time to the file.

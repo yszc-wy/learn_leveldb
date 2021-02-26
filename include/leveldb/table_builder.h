@@ -25,6 +25,7 @@ class BlockBuilder;
 class BlockHandle;
 class WritableFile;
 
+// 将table编码到文件中
 class LEVELDB_EXPORT TableBuilder {
  public:
   // Create a builder that will store the contents of the table it is
@@ -44,13 +45,16 @@ class LEVELDB_EXPORT TableBuilder {
   // passed to the constructor is different from its value in the
   // structure passed to this method, this method will return an error
   // without changing any fields.
+  // 只能改变一些运行时可变的选项
   Status ChangeOptions(const Options& options);
 
   // Add key,value to the table being constructed.
+  // 按顺序添加key
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
   void Add(const Slice& key, const Slice& value);
 
+  // 将key value flush到文件中
   // Advanced operation: flush any buffered key/value pairs to file.
   // Can be used to ensure that two adjacent entries never live in
   // the same data block.  Most clients should not need to use this method.
@@ -60,11 +64,13 @@ class LEVELDB_EXPORT TableBuilder {
   // Return non-ok iff some error has been detected.
   Status status() const;
 
+  // 在该函数调用之后,就不要使用传递给builder的file
   // Finish building the table.  Stops using the file passed to the
   // constructor after this function returns.
   // REQUIRES: Finish(), Abandon() have not been called
   Status Finish();
 
+  // builder中的内容应该被禁止,用在何处?
   // Indicate that the contents of this builder should be abandoned.  Stops
   // using the file passed to the constructor after this function returns.
   // If the caller is not going to call Finish(), it must call Abandon()
@@ -75,12 +81,14 @@ class LEVELDB_EXPORT TableBuilder {
   // Number of calls to Add() so far.
   uint64_t NumEntries() const;
 
+  // 返回生成文件的大小
   // Size of the file generated so far.  If invoked after a successful
   // Finish() call, returns the size of the final generated file.
   uint64_t FileSize() const;
 
  private:
   bool ok() const { return status().ok(); }
+  // 编码block
   void WriteBlock(BlockBuilder* block, BlockHandle* handle);
   void WriteRawBlock(const Slice& data, CompressionType, BlockHandle* handle);
 

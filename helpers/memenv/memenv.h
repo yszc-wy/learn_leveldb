@@ -10,7 +10,7 @@
 namespace leveldb {
 
 class Env;
-
+// yszc: 返回一个将数据全部保存在内存中的虚拟文件环境,对于非文件存储类的任务会委托给基本环境
 // Returns a new environment that stores its data in memory and delegates
 // all non-file-storage tasks to base_env. The caller must delete the result
 // when it is no longer needed.

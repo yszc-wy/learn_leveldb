@@ -206,6 +206,7 @@ void Histogram::Merge(const Histogram& other) {
 
 double Histogram::Median() const { return Percentile(50.0); }
 
+// 确定第%p的位置是什么值
 double Histogram::Percentile(double p) const {
   double threshold = num_ * (p / 100.0);
   double sum = 0;

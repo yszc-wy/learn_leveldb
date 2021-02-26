@@ -23,12 +23,14 @@ class Snapshot;
 // being stored in a file.  The following enum describes which
 // compression method (if any) is used to compress a block.
 enum CompressionType {
+  // 这些编码不要轻易修改,因为这些标志会持久化到磁盘中
   // NOTE: do not change the values of existing entries, as these are
   // part of the persistent format on disk.
   kNoCompression = 0x0,
   kSnappyCompression = 0x1
 };
 
+// 控制数据库行为的选项
 // Options to control the behavior of a database (passed to DB::Open)
 struct LEVELDB_EXPORT Options {
   // Create an Options object with default values for all fields.
@@ -56,6 +58,8 @@ struct LEVELDB_EXPORT Options {
   // errors.  This may have unforeseen ramifications: for example, a
   // corruption of one DB entry may cause a large number of entries to
   // become unreadable or for the entire DB to become unopenable.
+  //
+
   bool paranoid_checks = false;
 
   // Use the specified object to interact with the environment,
@@ -69,6 +73,7 @@ struct LEVELDB_EXPORT Options {
   Logger* info_log = nullptr;
 
   // -------------------
+  // 影响性能的配置
   // Parameters that affect performance
 
   // Amount of data to build up in memory (backed by an unsorted log
@@ -77,6 +82,7 @@ struct LEVELDB_EXPORT Options {
   // Larger values increase performance, especially during bulk loads.
   // Up to two write buffers may be held in memory at the same time,
   // so you may wish to adjust this parameter to control memory usage.
+  // 较大的写缓冲区将导致下次打开数据库时较长的恢复时间
   // Also, a larger write buffer will result in a longer recovery time
   // the next time the database is opened.
   size_t write_buffer_size = 4 * 1024 * 1024;

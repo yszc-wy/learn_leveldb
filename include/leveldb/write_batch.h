@@ -67,14 +67,17 @@ class LEVELDB_EXPORT WriteBatch {
   // This runs in O(source size) time. However, the constant factor is better
   // than calling Iterate() over the source batch with a Handler that replicates
   // the operations into this batch.
+  // 常数时间比使用iter对source进行遍历并将操作复制到当前batch要好
   void Append(const WriteBatch& source);
 
   // Support for iterating over the contents of a batch.
+  // 使用迭代器遍历batch的内容
   Status Iterate(Handler* handler) const;
 
  private:
   friend class WriteBatchInternal;
 
+  // 保存操作的rep_,是操作编码的结果
   std::string rep_;  // See comment in write_batch.cc for the format of rep_
 };
 

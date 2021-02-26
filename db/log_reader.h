@@ -40,6 +40,7 @@ class Reader {
   //
   // The Reader will start reading at the first record located at physical
   // position >= initial_offset within the file.
+  // 解码log文件,提供corruption reporter,和chechsum选项,从制定的offset开始decoder
   Reader(SequentialFile* file, Reporter* reporter, bool checksum,
          uint64_t initial_offset);
 
@@ -53,22 +54,23 @@ class Reader {
   // "*scratch" as temporary storage.  The contents filled in *record
   // will only be valid until the next mutating operation on this
   // reader or the next mutation to *scratch.
+  // 读取一条记录,成功返回true,到达end返回false,返回数据的有效期持续到下一次ReadRecord调用后
   bool ReadRecord(Slice* record, std::string* scratch);
 
   // Returns the physical offset of the last record returned by ReadRecord.
-  //
   // Undefined before the first call to ReadRecord.
+  // 返回最近由ReadRecord返回record的文件offset
   uint64_t LastRecordOffset();
 
  private:
   // Extend record types with the following special values
   enum {
     kEof = kMaxRecordType + 1,
-    // Returned whenever we find an invalid physical record.
+    // Returned whenever we find an invalid physical record. 无效record标记
     // Currently there are three situations in which this happens:
-    // * The record has an invalid CRC (ReadPhysicalRecord reports a drop)
-    // * The record is a 0-length record (No drop is reported)
-    // * The record is below constructor's initial_offset (No drop is reported)
+    // * The record has an invalid CRC (ReadPhysicalRecord reports a drop) crc无效
+    // * The record is a 0-length record (No drop is reported) 0长度record
+    // * The record is below constructor's initial_offset (No drop is reported) 啥意思?
     kBadRecord = kMaxRecordType + 2
   };
 
@@ -78,6 +80,7 @@ class Reader {
   bool SkipToInitialBlock();
 
   // Return type, or one of the preceding special values
+  // 返回值为record类型
   unsigned int ReadPhysicalRecord(Slice* result);
 
   // Reports dropped bytes to the reporter.
@@ -88,13 +91,16 @@ class Reader {
   SequentialFile* const file_;
   Reporter* const reporter_;
   bool const checksum_;
+  // 对每次读取的block进行缓存
   char* const backing_store_;
   Slice buffer_;
   bool eof_;  // Last Read() indicated EOF by returning < kBlockSize
 
   // Offset of the last record returned by ReadRecord.
+  // 最近读取的record的起始offset
   uint64_t last_record_offset_;
   // Offset of the first location past the end of buffer_.
+  // 正在读取的buffer的结尾offset
   uint64_t end_of_buffer_offset_;
 
   // Offset at which to start looking for the first record to return

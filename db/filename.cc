@@ -40,6 +40,7 @@ std::string SSTTableFileName(const std::string& dbname, uint64_t number) {
   return MakeFileName(dbname, number, "sst");
 }
 
+// 实际上是MANIFEST文件
 std::string DescriptorFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   char buf[100];
@@ -120,6 +121,7 @@ bool ParseFileName(const std::string& filename, uint64_t* number,
   return true;
 }
 
+// 修改current file中的当前manifest文件
 Status SetCurrentFile(Env* env, const std::string& dbname,
                       uint64_t descriptor_number) {
   // Remove leading "dbname/" and add newline to manifest file name

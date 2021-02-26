@@ -47,6 +47,7 @@ class PosixLogger final : public Logger {
       thread_id.resize(kMaxThreadIdSize);
     }
 
+    // 日志调用频繁:为减少内存分配次数,使用stack缓冲
     // We first attempt to print into a stack-allocated buffer. If this attempt
     // fails, we make a second attempt with a dynamically allocated buffer.
     constexpr const int kStackBufferSize = 512;
@@ -69,6 +70,7 @@ class PosixLogger final : public Logger {
           now_components.tm_sec, static_cast<int>(now_timeval.tv_usec),
           thread_id.c_str());
 
+      // 每写一段就assert一下
       // The header can be at most 28 characters (10 date + 15 time +
       // 3 delimiters) plus the thread ID, which should fit comfortably into the
       // static buffer.
@@ -87,12 +89,13 @@ class PosixLogger final : public Logger {
 
       // The code below may append a newline at the end of the buffer, which
       // requires an extra character.
+      // 如果offset已经写到缓冲区最后一个位置,说明需要动态缓冲区
       if (buffer_offset >= buffer_size - 1) {
         // The message did not fit into the buffer.
         if (iteration == 0) {
           // Re-run the loop and use a dynamically-allocated buffer. The buffer
           // will be large enough for the log message, an extra newline and a
-          // null terminator.
+          // null terminator. 需要为换行符和结束符预留位置
           dynamic_buffer_size = buffer_offset + 2;
           continue;
         }
@@ -101,9 +104,11 @@ class PosixLogger final : public Logger {
         // not happen, assuming a correct implementation of std::(v)snprintf.
         // Fail in tests, recover by truncating the log message in production.
         assert(false);
+        // 如果在release情况下日志过长(不推荐过长的日志),截断
         buffer_offset = buffer_size - 1;
       }
 
+      // 为最后一个位置添加换行符
       // Add a newline if necessary.
       if (buffer[buffer_offset - 1] != '\n') {
         buffer[buffer_offset] = '\n';
@@ -111,9 +116,11 @@ class PosixLogger final : public Logger {
       }
 
       assert(buffer_offset <= buffer_size);
+      // 写入文件并刷新
       std::fwrite(buffer, 1, buffer_offset, fp_);
       std::fflush(fp_);
 
+      // 一定别忘了释放缓冲区
       if (iteration != 0) {
         delete[] buffer;
       }

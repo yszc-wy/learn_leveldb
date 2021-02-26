@@ -24,6 +24,9 @@
 
 namespace leveldb {
 
+// slice和string相比减少了string的拷贝开销,slice不负责资源管理,更像是一个引用类型,它指向的资源必须存在且被其他类所管理(防止内存泄露)
+// 可以从char指针、string中初始化
+// 要自己保证不会使用已经被析构的资源
 class LEVELDB_EXPORT Slice {
  public:
   // Create an empty slice.
@@ -86,11 +89,13 @@ class LEVELDB_EXPORT Slice {
   }
 
  private:
+  // 注意slice不可改变其内容
   const char* data_;
   size_t size_;
 };
 
 inline bool operator==(const Slice& x, const Slice& y) {
+  // 注意这个字节比较函数
   return ((x.size() == y.size()) &&
           (memcmp(x.data(), y.data(), x.size()) == 0));
 }
@@ -99,6 +104,7 @@ inline bool operator!=(const Slice& x, const Slice& y) { return !(x == y); }
 
 inline int Slice::compare(const Slice& b) const {
   const size_t min_len = (size_ < b.size_) ? size_ : b.size_;
+  // 按照字节进行比较,若前n个都相同,就看谁更长,否则返回0
   int r = memcmp(data_, b.data_, min_len);
   if (r == 0) {
     if (size_ < b.size_)

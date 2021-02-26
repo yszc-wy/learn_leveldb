@@ -18,6 +18,7 @@ class BloomFilterPolicy : public FilterPolicy {
  public:
   explicit BloomFilterPolicy(int bits_per_key) : bits_per_key_(bits_per_key) {
     // We intentionally round down to reduce probing cost a little bit
+    // yszc: hash计算次数
     k_ = static_cast<size_t>(bits_per_key * 0.69);  // 0.69 =~ ln(2)
     if (k_ < 1) k_ = 1;
     if (k_ > 30) k_ = 30;
@@ -29,18 +30,23 @@ class BloomFilterPolicy : public FilterPolicy {
     // Compute bloom filter size (in both bits and bytes)
     size_t bits = n * bits_per_key_;
 
+    // bits太小会导致fp太高
     // For small n, we can see a very high false positive rate.  Fix it
     // by enforcing a minimum bloom filter length.
     if (bits < 64) bits = 64;
 
     size_t bytes = (bits + 7) / 8;
+    // yszc: 向前舍入
     bits = bytes * 8;
 
     const size_t init_size = dst->size();
     dst->resize(init_size + bytes, 0);
+    // 最后一个char保存hash次数
     dst->push_back(static_cast<char>(k_));  // Remember # of probes in filter
+    // 定位hash数组位置
     char* array = &(*dst)[init_size];
     for (int i = 0; i < n; i++) {
+      // 使用单个hash函数,double-hashing生成一系列哈希值
       // Use double-hashing to generate a sequence of hash values.
       // See analysis in [Kirsch,Mitzenmacher 2006].
       uint32_t h = BloomHash(keys[i]);
@@ -64,6 +70,7 @@ class BloomFilterPolicy : public FilterPolicy {
     // bloom filters created using different parameters.
     const size_t k = array[len - 1];
     if (k > 30) {
+      // 保留模式,总是为true
       // Reserved for potentially new encodings for short bloom filters.
       // Consider it a match.
       return true;

@@ -24,6 +24,9 @@ class TableCache {
   TableCache(const std::string& dbname, const Options& options, int entries);
   ~TableCache();
 
+  // 根据sstable的文件号来访问对应的table
+  // 没看懂看嘛的?
+  // file_size干嘛的?
   // Return an iterator for the specified file number (the corresponding
   // file length must be exactly "file_size" bytes).  If "tableptr" is
   // non-null, also sets "*tableptr" to point to the Table object
@@ -31,6 +34,8 @@ class TableCache {
   // underlies the returned iterator.  The returned "*tableptr" object is owned
   // by the cache and should not be deleted, and is valid for as long as the
   // returned iterator is live.
+  // 输入要读取的table文件,返回对应table文件的迭代器
+  // iterator要注册删除器,来维护引用计数
   Iterator* NewIterator(const ReadOptions& options, uint64_t file_number,
                         uint64_t file_size, Table** tableptr = nullptr);
 
@@ -46,9 +51,12 @@ class TableCache {
  private:
   Status FindTable(uint64_t file_number, uint64_t file_size, Cache::Handle**);
 
+  // 使用了env,为何要用env,要自己使用file_number构造文件名并读取想要的文件
   Env* const env_;
+  // 那个db的table缓存
   const std::string dbname_;
   const Options& options_;
+  // 基于对象的实现方法
   Cache* cache_;
 };
 

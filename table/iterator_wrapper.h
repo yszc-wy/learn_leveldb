@@ -14,6 +14,8 @@ namespace leveldb {
 // caches the valid() and key() results for an underlying iterator.
 // This can help avoid virtual function calls and also gives better
 // cache locality.
+// yszc: iterator的wrapper,缓存了iterator的key和valid,好处是避免了调用key()或vaild时的虚拟函数调用(较为耗时)
+// 接口和iterator差不多
 class IteratorWrapper {
  public:
   IteratorWrapper() : iter_(nullptr), valid_(false) {}
@@ -34,6 +36,7 @@ class IteratorWrapper {
   }
 
   // Iterator interface methods
+  // 
   bool Valid() const { return valid_; }
   Slice key() const {
     assert(Valid());

@@ -1,6 +1,5 @@
 leveldb
 =======
-
 _Jeff Dean, Sanjay Ghemawat_
 
 The leveldb library provides a persistent key value store. Keys and values are

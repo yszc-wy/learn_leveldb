@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 //
+// iterator从source中访问key/value pair序列
+// 如iterator可以访问table和db的内容
 // An iterator yields a sequence of key/value pairs from a source.
 // The following class defines the interface.  Multiple implementations
 // are provided by this library.  In particular, iterators are provided
@@ -30,23 +32,28 @@ class LEVELDB_EXPORT Iterator {
 
   virtual ~Iterator();
 
+  // yszc: 用来判断该迭代器是否有效
   // An iterator is either positioned at a key/value pair, or
   // not valid.  This method returns true iff the iterator is valid.
   virtual bool Valid() const = 0;
 
+  // 如果source不为空,在调用该seek以后,该iterator不会失效
   // Position at the first key in the source.  The iterator is Valid()
   // after this call iff the source is not empty.
   virtual void SeekToFirst() = 0;
 
+  // yszc:如果source不为空,在调用该seek以后,该iterator才为valid
   // Position at the last key in the source.  The iterator is
   // Valid() after this call iff the source is not empty.
   virtual void SeekToLast() = 0;
 
+  // yszc:定位在source中位于或超过目标的第一个key上,如果找不到可定位的点iterator为无效状态
   // Position at the first key in the source that is at or past target.
   // The iterator is Valid() after this call iff the source contains
   // an entry that comes at or past target.
   virtual void Seek(const Slice& target) = 0;
 
+  // 越过最后一个位置后为无效状态
   // Moves to the next entry in the source.  After this call, Valid() is
   // true iff the iterator was not positioned at the last entry in the source.
   // REQUIRES: Valid()
@@ -57,9 +64,11 @@ class LEVELDB_EXPORT Iterator {
   // REQUIRES: Valid()
   virtual void Prev() = 0;
 
+  // 返回当前entry的key,返回的slice的指针指向内部存储,只在下一次修改前有效!!!(不是拷贝,只是返回了指针!! 迭代器也是指针的一种)
   // Return the key for the current entry.  The underlying storage for
   // the returned slice is valid only until the next modification of
   // the iterator.
+
   // REQUIRES: Valid()
   virtual Slice key() const = 0;
 
@@ -72,6 +81,7 @@ class LEVELDB_EXPORT Iterator {
   // If an error has occurred, return it.  Else return an ok status.
   virtual Status status() const = 0;
 
+  // 注册回调函数,在iterator析构时回调
   // Clients are allowed to register function/arg1/arg2 triples that
   // will be invoked when this iterator is destroyed.
   //
@@ -81,7 +91,7 @@ class LEVELDB_EXPORT Iterator {
   void RegisterCleanup(CleanupFunction function, void* arg1, void* arg2);
 
  private:
-  // Cleanup functions are stored in a single-linked list.
+  // yszc: Cleanup functions are stored in a single-linked list.
   // The list's head node is inlined in the iterator.
   struct CleanupNode {
     // True if the node is not used. Only head nodes might be unused.

@@ -39,6 +39,7 @@ static const int kL0_StopWritesTrigger = 12;
 // expensive manifest file operations.  We do not push all the way to
 // the largest level since that can generate a lot of wasted disk
 // space if the same key space is being repeatedly overwritten.
+// 什么意思?
 static const int kMaxMemCompactLevel = 2;
 
 // Approximate gap in bytes between samples of data read during iteration.
@@ -58,16 +59,20 @@ enum ValueType { kTypeDeletion = 0x0, kTypeValue = 0x1 };
 // and the value type is embedded as the low 8 bits in the sequence
 // number in internal keys, we need to use the highest-numbered
 // ValueType, not the lowest).
+// 干什么的
 static const ValueType kValueTypeForSeek = kTypeValue;
 
 typedef uint64_t SequenceNumber;
 
 // We leave eight bits empty at the bottom so a type and sequence#
 // can be packed together into 64-bits.
+// 序列号低8位为ValueType,0x1ull中的ull为unsigned long long,这里标明了序列号的最大值,而64位的低8位是valuetyep
 static const SequenceNumber kMaxSequenceNumber = ((0x1ull << 56) - 1);
 
+// 不带长度,只有user_key,sequence,和type
 struct ParsedInternalKey {
   Slice user_key;
+  // 下面2个元素总长度为8
   SequenceNumber sequence;
   ValueType type;
 
@@ -78,6 +83,7 @@ struct ParsedInternalKey {
 };
 
 // Return the length of the encoding of "key".
+// 为何+8  sequence长度7bytes,type为1bytes,总8bytes
 inline size_t InternalKeyEncodingLength(const ParsedInternalKey& key) {
   return key.user_key.size() + 8;
 }
@@ -101,6 +107,7 @@ inline Slice ExtractUserKey(const Slice& internal_key) {
 // the user key portion and breaks ties by decreasing sequence number.
 class InternalKeyComparator : public Comparator {
  private:
+  // 普通的comparator
   const Comparator* user_comparator_;
 
  public:
@@ -131,6 +138,7 @@ class InternalFilterPolicy : public FilterPolicy {
 // Modules in this directory should keep internal keys wrapped inside
 // the following class instead of plain strings so that we do not
 // incorrectly use string comparisons instead of an InternalKeyComparator.
+// 保存已经编码好的InternamKey
 class InternalKey {
  private:
   std::string rep_;
@@ -168,6 +176,7 @@ inline int InternalKeyComparator::Compare(const InternalKey& a,
   return Compare(a.Encode(), b.Encode());
 }
 
+// 从internal_key中解码出result
 inline bool ParseInternalKey(const Slice& internal_key,
                              ParsedInternalKey* result) {
   const size_t n = internal_key.size();
@@ -203,6 +212,7 @@ class LookupKey {
 
  private:
   // We construct a char array of the form:
+  // yszc :klength标记了len(userkey+tag)
   //    klength  varint32               <-- start_
   //    userkey  char[klength]          <-- kstart_
   //    tag      uint64

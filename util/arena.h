@@ -13,6 +13,7 @@
 
 namespace leveldb {
 
+// yszc: leveldb内存池管理,以block为单位
 class Arena {
  public:
   Arena();
@@ -22,12 +23,15 @@ class Arena {
 
   ~Arena();
 
+  // 返回新分配的内存块
   // Return a pointer to a newly allocated memory block of "bytes" bytes.
   char* Allocate(size_t bytes);
 
+  // 返回新分配的对齐内存块
   // Allocate memory with the normal alignment guarantees provided by malloc.
   char* AllocateAligned(size_t bytes);
 
+  // 估计目前arena所分配的所有内存
   // Returns an estimate of the total memory usage of data allocated
   // by the arena.
   size_t MemoryUsage() const {
@@ -39,8 +43,11 @@ class Arena {
   char* AllocateNewBlock(size_t block_bytes);
 
   // Allocation state
+  // 保存当前block剩余部分的头指针(防止空间浪费)
   char* alloc_ptr_;
+  // 当前block剩余区域
   size_t alloc_bytes_remaining_;
+
 
   // Array of new[] allocated memory blocks
   std::vector<char*> blocks_;
@@ -56,7 +63,7 @@ inline char* Arena::Allocate(size_t bytes) {
   // The semantics of what to return are a bit messy if we allow
   // 0-byte allocations, so we disallow them here (we don't need
   // them for our internal use).
-  assert(bytes > 0);
+  assert(bytes > 0); // 无需0bit分配语义
   if (bytes <= alloc_bytes_remaining_) {
     char* result = alloc_ptr_;
     alloc_ptr_ += bytes;

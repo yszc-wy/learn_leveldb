@@ -11,6 +11,7 @@
 namespace leveldb {
 
 const char* Status::CopyState(const char* state) {
+  // yszc: 解码state的大小,然后deepcopy到result中
   uint32_t size;
   std::memcpy(&size, state, sizeof(size));
   char* result = new char[size + 5];
@@ -18,10 +19,12 @@ const char* Status::CopyState(const char* state) {
   return result;
 }
 
+// yszc: 将code和2个message写入status,message之间有": "的间隔
 Status::Status(Code code, const Slice& msg, const Slice& msg2) {
   assert(code != kOk);
   const uint32_t len1 = static_cast<uint32_t>(msg.size());
   const uint32_t len2 = static_cast<uint32_t>(msg2.size());
+  // yszc: 2是msg之间的间隔
   const uint32_t size = len1 + (len2 ? (2 + len2) : 0);
   char* result = new char[size + 5];
   std::memcpy(result, &size, sizeof(size));
@@ -35,6 +38,7 @@ Status::Status(Code code, const Slice& msg, const Slice& msg2) {
   state_ = result;
 }
 
+// yszc: 将state转化为可读字符串放入string
 std::string Status::ToString() const {
   if (state_ == nullptr) {
     return "OK";

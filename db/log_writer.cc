@@ -25,6 +25,7 @@ Writer::Writer(WritableFile* dest) : dest_(dest), block_offset_(0) {
 }
 
 Writer::Writer(WritableFile* dest, uint64_t dest_length)
+  // 获取block内部的offset
     : dest_(dest), block_offset_(dest_length % kBlockSize) {
   InitTypeCrc(type_crc_);
 }
@@ -38,9 +39,12 @@ Status Writer::AddRecord(const Slice& slice) {
   // Fragment the record if necessary and emit it.  Note that if slice
   // is empty, we still want to iterate once to emit a single
   // zero-length record
+  // 如果slice为空,我们依然插入空的record
   Status s;
   bool begin = true;
+  // 每次循环插入一个fragment
   do {
+    // 计算当前block剩下的bytes
     const int leftover = kBlockSize - block_offset_;
     assert(leftover >= 0);
     if (leftover < kHeaderSize) {
@@ -56,7 +60,9 @@ Status Writer::AddRecord(const Slice& slice) {
     // Invariant: we never leave < kHeaderSize bytes in a block.
     assert(kBlockSize - block_offset_ - kHeaderSize >= 0);
 
+    // 获取当前block中的avail data空间
     const size_t avail = kBlockSize - block_offset_ - kHeaderSize;
+    // 判断fragment的长度
     const size_t fragment_length = (left < avail) ? left : avail;
 
     RecordType type;
@@ -64,6 +70,7 @@ Status Writer::AddRecord(const Slice& slice) {
     if (begin && end) {
       type = kFullType;
     } else if (begin) {
+      // 如果left太大
       type = kFirstType;
     } else if (end) {
       type = kLastType;
@@ -71,8 +78,11 @@ Status Writer::AddRecord(const Slice& slice) {
       type = kMiddleType;
     }
 
+    // 真正进行fragment插入操作,并移动blockset
     s = EmitPhysicalRecord(type, ptr, fragment_length);
+    // 数据ptr前移
     ptr += fragment_length;
+    // 如果还有多余的data
     left -= fragment_length;
     begin = false;
   } while (s.ok() && left > 0);
@@ -103,6 +113,7 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr,
       s = dest_->Flush();
     }
   }
+  // blockoffset前移
   block_offset_ += kHeaderSize + length;
   return s;
 }

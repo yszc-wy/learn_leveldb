@@ -26,6 +26,7 @@ static const uint32_t kMaskDelta = 0xa282ead8ul;
 // Motivation: it is problematic to compute the CRC of a string that
 // contains embedded CRCs.  Therefore we recommend that CRCs stored
 // somewhere (e.g., in files) should be masked before being stored.
+// 计算包含嵌入式CRC的字符串的CRC是有问题的。因此，我们建议在存储之前将存储在某处（例如文件中）的CRC屏蔽。
 inline uint32_t Mask(uint32_t crc) {
   // Rotate right by 15 bits and add a constant.
   return ((crc >> 15) | (crc << 17)) + kMaskDelta;
@@ -41,3 +42,6 @@ inline uint32_t Unmask(uint32_t masked_crc) {
 }  // namespace leveldb
 
 #endif  // STORAGE_LEVELDB_UTIL_CRC32C_H_
+
+
+// Motivation: it is problematic to compute the CRC of a string that contains embedded CRCs.  Therefore we recommend that CRCs stored somewhere (e.g., in files) should be masked before being stored.

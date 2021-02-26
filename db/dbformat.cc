@@ -12,6 +12,7 @@
 
 namespace leveldb {
 
+// 组合seq和type为8bytes
 static uint64_t PackSequenceAndType(uint64_t seq, ValueType t) {
   assert(seq <= kMaxSequenceNumber);
   assert(t <= kValueTypeForSeek);
@@ -19,7 +20,9 @@ static uint64_t PackSequenceAndType(uint64_t seq, ValueType t) {
 }
 
 void AppendInternalKey(std::string* result, const ParsedInternalKey& key) {
+  // 将key编码到result中
   result->append(key.user_key.data(), key.user_key.size());
+  // 注意编码采用固定64
   PutFixed64(result, PackSequenceAndType(key.sequence, key.type));
 }
 
@@ -44,6 +47,7 @@ const char* InternalKeyComparator::Name() const {
   return "leveldb.InternalKeyComparator";
 }
 
+// 对Internal key中的不同部分有不同的排序标准,并不是通常意义上的字符排序
 int InternalKeyComparator::Compare(const Slice& akey, const Slice& bkey) const {
   // Order by:
   //    increasing user key (according to user-supplied comparator)
@@ -53,6 +57,7 @@ int InternalKeyComparator::Compare(const Slice& akey, const Slice& bkey) const {
   if (r == 0) {
     const uint64_t anum = DecodeFixed64(akey.data() + akey.size() - 8);
     const uint64_t bnum = DecodeFixed64(bkey.data() + bkey.size() - 8);
+    // 降序
     if (anum > bnum) {
       r = -1;
     } else if (anum < bnum) {
@@ -62,6 +67,7 @@ int InternalKeyComparator::Compare(const Slice& akey, const Slice& bkey) const {
   return r;
 }
 
+// 基于internalkey中的userkey进行查找
 void InternalKeyComparator::FindShortestSeparator(std::string* start,
                                                   const Slice& limit) const {
   // Attempt to shorten the user portion of the key
@@ -77,6 +83,7 @@ void InternalKeyComparator::FindShortestSeparator(std::string* start,
                PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
     assert(this->Compare(*start, tmp) < 0);
     assert(this->Compare(tmp, limit) < 0);
+    // 若找到一个在start和limit之间的shortest separator,就与start交换,否则返回原始start
     start->swap(tmp);
   }
 }
@@ -110,6 +117,7 @@ void InternalFilterPolicy::CreateFilter(const Slice* keys, int n,
   user_policy_->CreateFilter(keys, n, dst);
 }
 
+// 这个和createFilter不匹配??,createFilter用的是完整的key,但在这里是userkey
 bool InternalFilterPolicy::KeyMayMatch(const Slice& key, const Slice& f) const {
   return user_policy_->KeyMayMatch(ExtractUserKey(key), f);
 }

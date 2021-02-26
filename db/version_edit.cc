@@ -38,6 +38,10 @@ void VersionEdit::Clear() {
   new_files_.clear();
 }
 
+// 每个变量的存储格式:
+// type:
+// length:
+// data:
 void VersionEdit::EncodeTo(std::string* dst) const {
   if (has_comparator_) {
     PutVarint32(dst, kComparator);
@@ -61,17 +65,30 @@ void VersionEdit::EncodeTo(std::string* dst) const {
   }
 
   for (size_t i = 0; i < compact_pointers_.size(); i++) {
+    // type
+    // level
+    // length
+    // data(internalkey)
     PutVarint32(dst, kCompactPointer);
     PutVarint32(dst, compact_pointers_[i].first);  // level
     PutLengthPrefixedSlice(dst, compact_pointers_[i].second.Encode());
   }
 
   for (const auto& deleted_file_kvp : deleted_files_) {
+    // type
+    // level
+    // length
+    // data(文件号)
     PutVarint32(dst, kDeletedFile);
     PutVarint32(dst, deleted_file_kvp.first);   // level
     PutVarint64(dst, deleted_file_kvp.second);  // file number
   }
 
+  // 编码每个FileMetaData
+  // type: kNewFile v32
+  // level v32
+  // file_id v64
+  // file_size v64
   for (size_t i = 0; i < new_files_.size(); i++) {
     const FileMetaData& f = new_files_[i].second;
     PutVarint32(dst, kNewFile);
@@ -115,6 +132,7 @@ Status VersionEdit::DecodeFrom(const Slice& src) {
   Slice str;
   InternalKey key;
 
+  // 每个数据都是type开头,以决定怎么解码
   while (msg == nullptr && GetVarint32(&input, &tag)) {
     switch (tag) {
       case kComparator:

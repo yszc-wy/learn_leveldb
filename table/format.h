@@ -18,6 +18,7 @@ class Block;
 class RandomAccessFile;
 struct ReadOptions;
 
+// BlockHandle 指向一个文件范围,该文件范围存储data block或meta block
 // BlockHandle is a pointer to the extent of a file that stores a data
 // block or a meta block.
 class BlockHandle {
@@ -50,6 +51,7 @@ class Footer {
   // Encoded length of a Footer.  Note that the serialization of a
   // Footer will always occupy exactly this many bytes.  It consists
   // of two block handles and a magic number.
+  // 2个block handle和一个magic number
   enum { kEncodedLength = 2 * BlockHandle::kMaxEncodedLength + 8 };
 
   Footer() = default;
@@ -62,6 +64,7 @@ class Footer {
   const BlockHandle& index_handle() const { return index_handle_; }
   void set_index_handle(const BlockHandle& h) { index_handle_ = h; }
 
+  // 编码解码器
   void EncodeTo(std::string* dst) const;
   Status DecodeFrom(Slice* input);
 
@@ -75,7 +78,7 @@ class Footer {
 // and taking the leading 64 bits.
 static const uint64_t kTableMagicNumber = 0xdb4775248b80fb57ull;
 
-// 1-byte type + 32-bit crc
+// 1-byte type + 32-bit crc,Block为尾部有1byte的类型和32bit的校验码
 static const size_t kBlockTrailerSize = 5;
 
 struct BlockContents {
@@ -84,13 +87,14 @@ struct BlockContents {
   bool heap_allocated;  // True iff caller should delete[] data.data()
 };
 
+// 从文件中根据BlockHandle读取block,结果放入blockContent,为何block和blockcontent要分开?
 // Read the block identified by "handle" from "file".  On failure
 // return non-OK.  On success fill *result and return OK.
 Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
                  const BlockHandle& handle, BlockContents* result);
 
 // Implementation details follow.  Clients should ignore,
-
+// 默认初始化为UINTMAX
 inline BlockHandle::BlockHandle()
     : offset_(~static_cast<uint64_t>(0)), size_(~static_cast<uint64_t>(0)) {}
 

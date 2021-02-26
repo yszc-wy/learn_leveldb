@@ -8,27 +8,35 @@
 #include "leveldb/iterator.h"
 #include "table/iterator_wrapper.h"
 
-namespace leveldb {
+namespace leveldb 
+{
 
-namespace {
+namespace 
+{
 class MergingIterator : public Iterator {
  public:
   MergingIterator(const Comparator* comparator, Iterator** children, int n)
       : comparator_(comparator),
+        // 新建空迭代wrapper数组
         children_(new IteratorWrapper[n]),
         n_(n),
         current_(nullptr),
-        direction_(kForward) {
+        direction_(kForward) 
+  {
     for (int i = 0; i < n; i++) {
+      // 将数组用children填充
       children_[i].Set(children[i]);
     }
   }
 
+  // 释放资源
   ~MergingIterator() override { delete[] children_; }
 
   bool Valid() const override { return (current_ != nullptr); }
 
+  // 所有迭代器都是有序的
   void SeekToFirst() override {
+    // 所有的child都SeektoFirst
     for (int i = 0; i < n_; i++) {
       children_[i].SeekToFirst();
     }
@@ -60,6 +68,7 @@ class MergingIterator : public Iterator {
     // true for all of the non-current_ children since current_ is
     // the smallest child and key() == current_->key().  Otherwise,
     // we explicitly position the non-current_ children.
+    // 方向不一样,需要将其他非current的child定位到current所指向的key位置(将其他非current的定位调整好),才可以向下一位遍历!!
     if (direction_ != kForward) {
       for (int i = 0; i < n_; i++) {
         IteratorWrapper* child = &children_[i];
@@ -74,6 +83,7 @@ class MergingIterator : public Iterator {
       direction_ = kForward;
     }
 
+    // 如果是前向的,找下一个key,只需要先移动再比较即可
     current_->Next();
     FindSmallest();
   }
@@ -132,15 +142,20 @@ class MergingIterator : public Iterator {
   // Which direction is the iterator moving?
   enum Direction { kForward, kReverse };
 
+  // 找到所有child迭代器所指向的key中的最大小值,并让current指向该iter
   void FindSmallest();
   void FindLargest();
 
+  // 我们使用堆是为了防止大量children的情况
+  // 现在，我们使用一个简单的数组，因为我们期望leveldb中的子代数量很少。
   // We might want to use a heap in case there are lots of children.
   // For now we use a simple array since we expect a very small number
   // of children in leveldb.
   const Comparator* comparator_;
+  // children数组
   IteratorWrapper* children_;
   int n_;
+  // 当前children iter
   IteratorWrapper* current_;
   Direction direction_;
 };
@@ -179,7 +194,7 @@ void MergingIterator::FindLargest() {
 Iterator* NewMergingIterator(const Comparator* comparator, Iterator** children,
                              int n) {
   assert(n >= 0);
-  if (n == 0) {
+  if (n == 0) { // yszc: 特殊值处理
     return NewEmptyIterator();
   } else if (n == 1) {
     return children[0];

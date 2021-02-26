@@ -16,6 +16,7 @@ namespace leveldb {
 
 void AppendNumberTo(std::string* str, uint64_t num) {
   char buf[30];
+  // snprintf会在尾部添加'\0'
   std::snprintf(buf, sizeof(buf), "%llu", static_cast<unsigned long long>(num));
   str->append(buf);
 }
@@ -46,6 +47,7 @@ std::string EscapeString(const Slice& value) {
   return r;
 }
 
+// 字符串转数字
 bool ConsumeDecimalNumber(Slice* in, uint64_t* val) {
   // Constants that will be optimized away.
   constexpr const uint64_t kMaxUint64 = std::numeric_limits<uint64_t>::max();
@@ -59,10 +61,13 @@ bool ConsumeDecimalNumber(Slice* in, uint64_t* val) {
 
   const uint8_t* end = start + in->size();
   const uint8_t* current = start;
+  // 字符从小到大分别为最高位到最低位
   for (; current != end; ++current) {
     const uint8_t ch = *current;
+    // 遇到非数字就截断
     if (ch < '0' || ch > '9') break;
 
+    // 防止溢出,在溢出前检查
     // Overflow check.
     // kMaxUint64 / 10 is also constant and will be optimized away.
     if (value > kMaxUint64 / 10 ||
@@ -75,6 +80,7 @@ bool ConsumeDecimalNumber(Slice* in, uint64_t* val) {
 
   *val = value;
   const size_t digits_consumed = current - start;
+  // 注意in也会截断!!
   in->remove_prefix(digits_consumed);
   return digits_consumed != 0;
 }

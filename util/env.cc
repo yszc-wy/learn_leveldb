@@ -12,6 +12,7 @@
 #undef DeleteFile
 #endif
 
+// yszc: 在Env和其他文件接口的基础上,把utility function(无需了解Env,和其他文件的细节),具体的给予各个Env派生实现不再这里
 namespace leveldb {
 
 Env::Env() = default;

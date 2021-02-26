@@ -9,7 +9,7 @@
 // information from disk. In many cases, a filter can cut down the
 // number of disk seeks form a handful to a single disk seek per
 // DB::Get() call.
-//
+// yszc: 过滤器一般情况下可以将多磁盘查找锐减为单磁盘查找
 // Most people will want to use the builtin bloom filter support (see
 // NewBloomFilterPolicy() below).
 
@@ -38,6 +38,8 @@ class LEVELDB_EXPORT FilterPolicy {
   // that are ordered according to the user supplied comparator.
   // Append a filter that summarizes keys[0,n-1] to *dst.
   //
+  // yszc: key中内容已被排序
+  // yszc: 不要改变dst中的原始内容,只将summarizes追加到dst中
   // Warning: do not change the initial contents of *dst.  Instead,
   // append the newly constructed filter to *dst.
   virtual void CreateFilter(const Slice* keys, int n,
@@ -48,6 +50,7 @@ class LEVELDB_EXPORT FilterPolicy {
   // the key was in the list of keys passed to CreateFilter().
   // This method may return true or false if the key was not on the
   // list, but it should aim to return false with a high probability.
+  // yszc: 存在就一定要返回true,不存在可以返回true或false,最好大概率返回false
   virtual bool KeyMayMatch(const Slice& key, const Slice& filter) const = 0;
 };
 
@@ -58,6 +61,7 @@ class LEVELDB_EXPORT FilterPolicy {
 // Callers must delete the result after any database that is using the
 // result has been closed.
 //
+// yszc:
 // Note: if you are using a custom comparator that ignores some parts
 // of the keys being compared, you must not use NewBloomFilterPolicy()
 // and must provide your own FilterPolicy that also ignores the

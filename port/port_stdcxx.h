@@ -62,6 +62,7 @@ class LOCKABLE Mutex {
 };
 
 // Thinly wraps std::condition_variable.
+// 对std::condition_variable进行简单包装
 class CondVar {
  public:
   explicit CondVar(Mutex* mu) : mu_(mu) { assert(mu != nullptr); }
@@ -71,7 +72,11 @@ class CondVar {
   CondVar& operator=(const CondVar&) = delete;
 
   void Wait() {
+    // yszc: https://www.cnblogs.com/haippy/p/3346477.html
+    // yszc: 新创建的 unique_lock 对象管理 Mutex 对象 m， m 应该是一个已经被当前线程锁住的 Mutex 对象。(并且当前新创建的 unique_lock 对象拥有对锁(Lock)的所有权)。就是加解锁要靠自己,使用unique_lock可以提醒使用者加锁
+    // yszc: question: 这里的wait和pthread_cond的wait的区别是啥,条件变量wait的原理是什么
     std::unique_lock<std::mutex> lock(mu_->mu_, std::adopt_lock);
+    // yszc: 这里的wait也需要lock
     cv_.wait(lock);
     lock.release();
   }
@@ -83,12 +88,15 @@ class CondVar {
   Mutex* const mu_;
 };
 
+// 使用snappy来压缩指定长度的数据
 inline bool Snappy_Compress(const char* input, size_t length,
                             std::string* output) {
 #if HAVE_SNAPPY
+  // 先为string分配好最大空间,防止溢出
   output->resize(snappy::MaxCompressedLength(length));
   size_t outlen;
   snappy::RawCompress(input, length, &(*output)[0], &outlen);
+  // 填充压缩后的数据后再缩小
   output->resize(outlen);
   return true;
 #else
@@ -106,6 +114,7 @@ inline bool Snappy_GetUncompressedLength(const char* input, size_t length,
 #if HAVE_SNAPPY
   return snappy::GetUncompressedLength(input, length, result);
 #else
+  // 如果不加这3个语句,直接return false,编译器会警告这3个变量未使用,我们用此方法静默warning
   // Silence compiler warnings about unused arguments.
   (void)input;
   (void)length;
@@ -133,6 +142,7 @@ inline bool GetHeapProfile(void (*func)(void*, const char*, int), void* arg) {
   return false;
 }
 
+// yszc: 扩展校验码,使其包含buf
 inline uint32_t AcceleratedCRC32C(uint32_t crc, const char* buf, size_t size) {
 #if HAVE_CRC32C
   return ::crc32c::Extend(crc, reinterpret_cast<const uint8_t*>(buf), size);

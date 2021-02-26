@@ -3,11 +3,11 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 //
 // WriteBatch::rep_ :=
-//    sequence: fixed64
-//    count: fixed32
+//    sequence: fixed64 序列号
+//    count: fixed32 数量
 //    data: record[count]
-// record :=
-//    kTypeValue varstring varstring         |
+// record := 记录由type开头,kTypeValue后接2个lengthprefixslice,kTypeDeletion后接1个lengthprefixslice
+//    kTypeValue varstring varstring    (k,v)
 //    kTypeDeletion varstring
 // varstring :=
 //    len: varint32
@@ -39,6 +39,7 @@ void WriteBatch::Clear() {
 
 size_t WriteBatch::ApproximateSize() const { return rep_.size(); }
 
+// 遍历writebatch,并提供handler操作函数接口
 Status WriteBatch::Iterate(Handler* handler) const {
   Slice input(rep_);
   if (input.size() < kHeader) {
@@ -133,6 +134,7 @@ Status WriteBatchInternal::InsertInto(const WriteBatch* b, MemTable* memtable) {
   MemTableInserter inserter;
   inserter.sequence_ = WriteBatchInternal::Sequence(b);
   inserter.mem_ = memtable;
+  // 对writeBatch进行迭代,使用handle将操作插入到memtable
   return b->Iterate(&inserter);
 }
 
@@ -141,6 +143,7 @@ void WriteBatchInternal::SetContents(WriteBatch* b, const Slice& contents) {
   b->rep_.assign(contents.data(), contents.size());
 }
 
+// 使用编码级别的合并操作,避免了一个一个用迭代器添加
 void WriteBatchInternal::Append(WriteBatch* dst, const WriteBatch* src) {
   SetCount(dst, Count(dst) + Count(src));
   assert(src->rep_.size() >= kHeader);

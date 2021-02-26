@@ -1,0 +1,7 @@
+[
+    {
+        "directory": "/home/yszc/Projects/cxx_projects/learn_db/leveldb/test/build",
+        "command": "/usr/bin/clang++   -I/home/yszc/Projects/cxx_projects/learn_db/leveldb/include  -g   -std=gnu++11 -o CMakeFiles/main.dir/test.cpp.o -c /home/yszc/Projects/cxx_projects/learn_db/leveldb/test/test.cpp -I/usr/include/ -I/usr/include/c++/9.2.0/ ",
+        "file": "/home/yszc/Projects/cxx_projects/learn_db/leveldb/test/test.cpp"
+    }
+]

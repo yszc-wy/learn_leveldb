@@ -36,12 +36,14 @@
 #include "util/posix_logger.h"
 
 namespace leveldb {
-
+// yszc: posix系统下的Env及其文件系统的实现
+// yszc: QUE: 为何需要空的namespace,class声明为何在.cc文件而不是.h文件中?
 namespace {
 
 // Set by EnvPosixTestHelper::SetReadOnlyMMapLimit() and MaxOpenFiles().
 int g_open_read_only_file_limit = -1;
 
+// 1000个可分配的内存映射区域
 // Up to 1000 mmap regions for 64-bit binaries; none for 32-bit.
 constexpr const int kDefaultMmapLimit = (sizeof(void*) >= 8) ? 1000 : 0;
 
@@ -57,6 +59,7 @@ constexpr const int kOpenBaseFlags = 0;
 
 constexpr const size_t kWritableFileBufferSize = 65536;
 
+// yszc: 错误码-> string
 Status PosixError(const std::string& context, int error_number) {
   if (error_number == ENOENT) {
     return Status::NotFound(context, std::strerror(error_number));
@@ -65,6 +68,7 @@ Status PosixError(const std::string& context, int error_number) {
   }
 }
 
+// yszc: 系统限制
 // Helper class to limit resource usage to avoid exhaustion.
 // Currently used to limit read-only file descriptors and mmap file usage
 // so that we do not run out of file descriptors or virtual memory, or run into
@@ -79,12 +83,14 @@ class Limiter {
 
   // If another resource is available, acquire it and return true.
   // Else return false.
+  //
   bool Acquire() {
     int old_acquires_allowed =
         acquires_allowed_.fetch_sub(1, std::memory_order_relaxed);
 
     if (old_acquires_allowed > 0) return true;
 
+    // yszc: memory_order使用的解释 http://blog.gssxgss.me/how-to-understand-cpp-atomic-memory-order-1/
     acquires_allowed_.fetch_add(1, std::memory_order_relaxed);
     return false;
   }
@@ -94,6 +100,8 @@ class Limiter {
   void Release() { acquires_allowed_.fetch_add(1, std::memory_order_relaxed); }
 
  private:
+  // yszc: 代表当前可使用的资源,atomic类型 https://blog.csdn.net/u014673282/article/details/89789139
+  // a
   // The number of available resources.
   //
   // This is a counter and is not tied to the invariants of any other class, so
@@ -105,12 +113,15 @@ class Limiter {
 //
 // Instances of this class are thread-friendly but not thread-safe, as required
 // by the SequentialFile API.
+// yszc: RAII资源管理 QUE: 为何线程不安全? Read和Read会产生竞争条件吗?(不会,可以和原子read对比一下),Read和Skip产生竞争条件(看谁先进入read或lseek,顺序不同,读取的内容不一样),但该竞争可以接受,不会造成严重的系统崩溃和数据的不一致性
 class PosixSequentialFile final : public SequentialFile {
  public:
   PosixSequentialFile(std::string filename, int fd)
       : fd_(fd), filename_(filename) {}
   ~PosixSequentialFile() override { close(fd_); }
 
+  // yszc: 由于Slice中的const char不可变,所以不能只传result来读取数据,必须用scratch获取数据,然后保存在slice中
+  // yszc: 系统调用自带if检查
   Status Read(size_t n, Slice* result, char* scratch) override {
     Status status;
     while (true) {
@@ -128,6 +139,7 @@ class PosixSequentialFile final : public SequentialFile {
     return status;
   }
 
+  
   Status Skip(uint64_t n) override {
     if (::lseek(fd_, n, SEEK_CUR) == static_cast<off_t>(-1)) {
       return PosixError(filename_, errno);
@@ -145,6 +157,7 @@ class PosixSequentialFile final : public SequentialFile {
 // Instances of this class are thread-safe, as required by the RandomAccessFile
 // API. Instances are immutable and Read() only calls thread-safe library
 // functions.
+// yszc: RAII,且使用fd_limiter限制文件描述符数量
 class PosixRandomAccessFile final : public RandomAccessFile {
  public:
   // The new instance takes ownership of |fd|. |fd_limiter| must outlive this
@@ -181,6 +194,7 @@ class PosixRandomAccessFile final : public RandomAccessFile {
     assert(fd != -1);
 
     Status status;
+    // pread同时定位和读取,所以是线程安全的
     ssize_t read_size = ::pread(fd, scratch, n, static_cast<off_t>(offset));
     *result = Slice(scratch, (read_size < 0) ? 0 : read_size);
     if (read_size < 0) {
@@ -202,6 +216,7 @@ class PosixRandomAccessFile final : public RandomAccessFile {
   const std::string filename_;
 };
 
+// yszc: 随机读一个使用内存映射的文件
 // Implements random read access in a file using mmap().
 //
 // Instances of this class are thread-safe, as required by the RandomAccessFile
@@ -246,6 +261,7 @@ class PosixMmapReadableFile final : public RandomAccessFile {
   const std::string filename_;
 };
 
+// 追加写文件
 class PosixWritableFile final : public WritableFile {
  public:
   PosixWritableFile(std::string filename, int fd)
@@ -253,6 +269,7 @@ class PosixWritableFile final : public WritableFile {
         fd_(fd),
         is_manifest_(IsManifest(filename)),
         filename_(std::move(filename)),
+        // 提取文件所在的目录
         dirname_(Dirname(filename_)) {}
 
   ~PosixWritableFile() override {
@@ -267,6 +284,7 @@ class PosixWritableFile final : public WritableFile {
     const char* write_data = data.data();
 
     // Fit as much as possible into buffer.
+    // yszc:尽可能将数据拷贝到写缓冲区中
     size_t copy_size = std::min(write_size, kWritableFileBufferSize - pos_);
     std::memcpy(buf_ + pos_, write_data, copy_size);
     write_data += copy_size;
@@ -276,18 +294,21 @@ class PosixWritableFile final : public WritableFile {
       return Status::OK();
     }
 
+    // yszc: 若还没写完,说明缓冲区已经满了,这是可以进行一次系统调用来真正进行写操作(和网络不一样,网络发送会要求立即送,没发完的放入缓冲区等待epoll通知后异步发送,重点是非阻塞)
     // Can't fit in buffer, so need to do at least one write.
     Status status = FlushBuffer();
     if (!status.ok()) {
       return status;
     }
 
+    // yszc:清空缓冲区后,若剩余大小可以放入缓冲区,就放入
     // Small writes go to buffer, large writes are written directly.
     if (write_size < kWritableFileBufferSize) {
       std::memcpy(buf_, write_data, write_size);
       pos_ = write_size;
       return Status::OK();
     }
+    // yszc: 对于太大的数据,另外处理
     return WriteUnbuffered(write_data, write_size);
   }
 
@@ -309,6 +330,7 @@ class PosixWritableFile final : public WritableFile {
     // This needs to happen before the manifest file is flushed to disk, to
     // avoid crashing in a state where the manifest refers to files that are not
     // yet on disk.
+    // 先同步目录
     Status status = SyncDirIfManifest();
     if (!status.ok()) {
       return status;
@@ -319,6 +341,7 @@ class PosixWritableFile final : public WritableFile {
       return status;
     }
 
+    // 再同步文件
     return SyncFd(fd_, filename_);
   }
 
@@ -329,6 +352,7 @@ class PosixWritableFile final : public WritableFile {
     return status;
   }
 
+  // 对于特大文件,采用带阻塞的循环写入
   Status WriteUnbuffered(const char* data, size_t size) {
     while (size > 0) {
       ssize_t write_result = ::write(fd_, data, size);
@@ -344,6 +368,7 @@ class PosixWritableFile final : public WritableFile {
     return Status::OK();
   }
 
+  // 对目录进行同步的目的?
   Status SyncDirIfManifest() {
     Status status;
     if (!is_manifest_) {
@@ -354,6 +379,7 @@ class PosixWritableFile final : public WritableFile {
     if (fd < 0) {
       status = PosixError(dirname_, errno);
     } else {
+      // 同步目录
       status = SyncFd(fd, dirname_);
       ::close(fd);
     }
@@ -378,8 +404,10 @@ class PosixWritableFile final : public WritableFile {
 #endif  // HAVE_FULLFSYNC
 
 #if HAVE_FDATASYNC
+    // 一般只写文件数据,只在必要情况下同步inode,有该函数就用这个函数
     bool sync_success = ::fdatasync(fd) == 0;
 #else
+    // 否则用fsync,会有2次写操作,写数据和写inode
     bool sync_success = ::fsync(fd) == 0;
 #endif  // HAVE_FDATASYNC
 
@@ -440,6 +468,7 @@ int LockOrUnlock(int fd, bool lock) {
   errno = 0;
   struct ::flock file_lock_info;
   std::memset(&file_lock_info, 0, sizeof(file_lock_info));
+  // 对文件加读写锁
   file_lock_info.l_type = (lock ? F_WRLCK : F_UNLCK);
   file_lock_info.l_whence = SEEK_SET;
   file_lock_info.l_start = 0;
@@ -462,7 +491,7 @@ class PosixFileLock : public FileLock {
 };
 
 // Tracks the files locked by PosixEnv::LockFile().
-//
+// yszc :追踪被加锁的文件,不是用fcntl是因为非线程安全
 // We maintain a separate set instead of relying on fcntl(F_SETLK) because
 // fcntl(F_SETLK) does not provide any protection against multiple uses from the
 // same process.
@@ -487,6 +516,7 @@ class PosixLockTable {
   std::set<std::string> locked_files_ GUARDED_BY(mu_);
 };
 
+// yszc: 文件工厂,单例类!!!
 class PosixEnv : public Env {
  public:
   PosixEnv();
@@ -517,11 +547,15 @@ class PosixEnv : public Env {
       return PosixError(filename, errno);
     }
 
+    // 随机读文件时:
+    // 若内存映射到达上限,就生成随机访问文件
     if (!mmap_limiter_.Acquire()) {
       *result = new PosixRandomAccessFile(filename, fd, &fd_limiter_);
       return Status::OK();
     }
 
+    // 否则就使用内存映射,内存映射在读取时无需陷入内核,直接从指定位置拷贝数据即可,便于随机访问
+    // 但需要消耗页缓存
     uint64_t file_size;
     Status status = GetFileSize(filename, &file_size);
     if (status.ok()) {
@@ -581,6 +615,7 @@ class PosixEnv : public Env {
     }
     struct ::dirent* entry;
     while ((entry = ::readdir(dir)) != nullptr) {
+      // yszc: emplace_back可以将对象的参数直接传递给构造函数,如果使用再拷贝一次
       result->emplace_back(entry->d_name);
     }
     ::closedir(dir);
@@ -633,11 +668,13 @@ class PosixEnv : public Env {
       return PosixError(filename, errno);
     }
 
+    // 记录lock表
     if (!locks_.Insert(filename)) {
       ::close(fd);
       return Status::IOError("lock " + filename, "already held by process");
     }
 
+    // 对文件加锁
     if (LockOrUnlock(fd, true) == -1) {
       int lock_errno = errno;
       ::close(fd);
@@ -645,6 +682,7 @@ class PosixEnv : public Env {
       return PosixError("lock " + filename, lock_errno);
     }
 
+    // 返回加锁的文件(const)
     *lock = new PosixFileLock(fd, filename);
     return Status::OK();
   }
@@ -655,6 +693,7 @@ class PosixEnv : public Env {
       return PosixError("unlock " + posix_file_lock->filename(), errno);
     }
     locks_.Remove(posix_file_lock->filename());
+    // 负责文件资源的释放
     ::close(posix_file_lock->fd());
     delete posix_file_lock;
     return Status::OK();
@@ -680,6 +719,7 @@ class PosixEnv : public Env {
       *result = buf;
     }
 
+    // yszc: 若不存在就创建一个测试文件夹
     // The CreateDir status is ignored because the directory may already exist.
     CreateDir(*result);
 
@@ -729,14 +769,17 @@ class PosixEnv : public Env {
   // background thread.
   //
   // This structure is thread-safe beacuse it is immutable.
+  // yszc: immutable可以保证线程安全
   struct BackgroundWorkItem {
     explicit BackgroundWorkItem(void (*function)(void* arg), void* arg)
         : function(function), arg(arg) {}
 
+    // immutable const
     void (*const function)(void*);
     void* const arg;
   };
 
+  // yszc: 阻塞队列与工作线程,使用数量固定的线程执行一些任务,毕竟不能每来一个任务都分配一个线程
   port::Mutex background_work_mutex_;
   port::CondVar background_work_cv_ GUARDED_BY(background_work_mutex_);
   bool started_background_thread_ GUARDED_BY(background_work_mutex_);
@@ -749,19 +792,23 @@ class PosixEnv : public Env {
   Limiter fd_limiter_;    // Thread-safe.
 };
 
+// 获取系统限制,在Env初始化时要用
 // Return the maximum number of concurrent mmaps.
 int MaxMmaps() { return g_mmap_limit; }
 
+// y:读本系统限制
 // Return the maximum number of read-only files to keep open.
 int MaxOpenFiles() {
   if (g_open_read_only_file_limit >= 0) {
     return g_open_read_only_file_limit;
   }
+  // yszc:https://blog.csdn.net/rikeyone/article/details/88798384
   struct ::rlimit rlim;
   if (::getrlimit(RLIMIT_NOFILE, &rlim)) {
     // getrlimit failed, fallback to hard-coded default.
     g_open_read_only_file_limit = 50;
   } else if (rlim.rlim_cur == RLIM_INFINITY) {
+    // yszc: 获取类型最大值可以用这个!!!
     g_open_read_only_file_limit = std::numeric_limits<int>::max();
   } else {
     // Allow use of 20% of available file descriptors for read-only files.
@@ -784,21 +831,28 @@ void PosixEnv::Schedule(
   background_work_mutex_.Lock();
 
   // Start the background thread, if we haven't done so already.
+  // 函数开始启动时,若Schedule未解锁,work_thread会阻塞在第一个lock函数上
   if (!started_background_thread_) {
     started_background_thread_ = true;
     std::thread background_thread(PosixEnv::BackgroundThreadEntryPoint, this);
     background_thread.detach();
   }
 
+  // yszc: 这里没有每次插入都唤醒,当queue为空时,Signal会使得正在等待的wait进入临界区,由于当前临界区已锁定,work_thread会阻塞在入口
+  // 在有多个背景线程的情况下(多个backthread阻塞,多个schedule顺序执行enqueue操作),会导致signal只执行一次,导致只有一个线程被唤醒,该线程就负担了所有enqueue插入任务的工作量(因为只有从0->1时才会notify一个线程),使得其他backthread一直处于阻塞状态(饿死)
+  // 所幸这里只有一个线程,所以不是问题
   // If the queue is empty, the background thread may be waiting for work.
   if (background_work_queue_.empty()) {
     background_work_cv_.Signal();
   }
 
+  // 添加元素
   background_work_queue_.emplace(background_work_function, background_work_arg);
   background_work_mutex_.Unlock();
+  // 退出临界区后,工作线程的临界区解锁,会发现backgroud_word_queue已经为非空,开始处理任务
 }
 
+// yszc: 如何防止背景线程空转? 使用阻塞队列
 void PosixEnv::BackgroundThreadMain() {
   while (true) {
     background_work_mutex_.Lock();
@@ -806,6 +860,7 @@ void PosixEnv::BackgroundThreadMain() {
     // Wait until there is work to be done.
     while (background_work_queue_.empty()) {
       background_work_cv_.Wait();
+      // 在此解锁
     }
 
     assert(!background_work_queue_.empty());
@@ -814,6 +869,7 @@ void PosixEnv::BackgroundThreadMain() {
     background_work_queue_.pop();
 
     background_work_mutex_.Unlock();
+    // 执行函数不在锁范围内
     background_work_function(background_work_arg);
   }
 }
@@ -825,6 +881,7 @@ namespace {
 // Intended usage:
 //   using PlatformSingletonEnv = SingletonEnv<PlatformEnv>;
 //   void ConfigurePosixEnv(int param) {
+//     // 需要保证env在没有实例化,才可以对一些limit进行配置,所以需要这个未初始化的判断
 //     PlatformSingletonEnv::AssertEnvNotInitialized();
 //     // set global configuration flags.
 //   }
@@ -832,6 +889,7 @@ namespace {
 //     static PlatformSingletonEnv default_env;
 //     return default_env.env();
 //   }
+//   yszc: 一种完全不同的单例类实现方法
 template <typename EnvType>
 class SingletonEnv {
  public:
@@ -843,6 +901,7 @@ class SingletonEnv {
                   "env_storage_ will not fit the Env");
     static_assert(alignof(decltype(env_storage_)) >= alignof(EnvType),
                   "env_storage_ does not meet the Env's alignment needs");
+    // 在制定的地址创建Env对象
     new (&env_storage_) EnvType();
   }
   ~SingletonEnv() = default;
@@ -859,6 +918,9 @@ class SingletonEnv {
   }
 
  private:
+  // yszc: 在模板中的类型定义需要加前缀typename,防止和静态变量混淆
+  // std::aligned_storage<Len,Align> QUE:不太懂内存对齐的原理
+  // 按照制定的对齐方式和大小分配空间,如果不提供Align值,默认对齐为小于len的最大对齐方式(如len为32,则align为16,len为8,align为8),如果提供,必须提供alignof(T) T为要存储的类型,
   typename std::aligned_storage<sizeof(EnvType), alignof(EnvType)>::type
       env_storage_;
 #if !defined(NDEBUG)
@@ -875,6 +937,7 @@ using PosixDefaultEnv = SingletonEnv<PosixEnv>;
 
 }  // namespace
 
+// 在初始化前才可以设置
 void EnvPosixTestHelper::SetReadOnlyFDLimit(int limit) {
   PosixDefaultEnv::AssertEnvNotInitialized();
   g_open_read_only_file_limit = limit;
@@ -885,7 +948,9 @@ void EnvPosixTestHelper::SetReadOnlyMMapLimit(int limit) {
   g_mmap_limit = limit;
 }
 
+// 获取该单例类的函数
 Env* Env::Default() {
+  // static代替pthread_once
   static PosixDefaultEnv env_container;
   return env_container.env();
 }

@@ -30,6 +30,8 @@ class FileState {
   FileState(const FileState&) = delete;
   FileState& operator=(const FileState&) = delete;
 
+  // yszc: 注意该引用计数是手动管理的,该类禁止拷贝
+  // 其实可以不用Ref和Unref,直接将FileState的指针交给shared_ptr管理
   // Increase the reference count.
   void Ref() {
     MutexLock lock(&refs_mutex_);
@@ -83,6 +85,7 @@ class FileState {
     }
 
     assert(offset / kBlockSize <= std::numeric_limits<size_t>::max());
+    // 计算offset在文件的哪个块以及其块偏移
     size_t block = static_cast<size_t>(offset / kBlockSize);
     size_t block_offset = offset % kBlockSize;
     size_t bytes_to_copy = n;
@@ -93,6 +96,7 @@ class FileState {
       if (avail > bytes_to_copy) {
         avail = bytes_to_copy;
       }
+      // 注意是内存拷贝
       std::memcpy(dst, blocks_[block] + block_offset, avail);
 
       bytes_to_copy -= avail;
@@ -119,6 +123,7 @@ class FileState {
         avail = kBlockSize - offset;
       } else {
         // No room in the last block; push new one.
+        // 内存分配多余的块
         blocks_.push_back(new char[kBlockSize]);
         avail = kBlockSize;
       }
@@ -144,11 +149,14 @@ class FileState {
   port::Mutex refs_mutex_;
   int refs_ GUARDED_BY(refs_mutex_);
 
+  // yszc: mutex_保护下面2个变量,guarded_by属性是为了保证线程安全，使用该属性后，线程要使用相应变量，必须先锁定mutex_
+  // yszc:一个块默认8kb,FileState是保存在内存中的虚拟文件?
   mutable port::Mutex blocks_mutex_;
   std::vector<char*> blocks_ GUARDED_BY(blocks_mutex_);
   uint64_t size_ GUARDED_BY(blocks_mutex_);
 };
 
+// yszc: 持有FileState文件缓冲区指针,负责管理seq类型文件(貌似没有和文件相关的fd,读写都在内存...)
 class SequentialFileImpl : public SequentialFile {
  public:
   explicit SequentialFileImpl(FileState* file) : file_(file), pos_(0) {
@@ -157,6 +165,7 @@ class SequentialFileImpl : public SequentialFile {
 
   ~SequentialFileImpl() override { file_->Unref(); }
 
+  // 虚函数覆盖
   Status Read(size_t n, Slice* result, char* scratch) override {
     Status s = file_->Read(pos_, n, result, scratch);
     if (s.ok()) {
@@ -179,6 +188,7 @@ class SequentialFileImpl : public SequentialFile {
 
  private:
   FileState* file_;
+  // 记录文件的读取位置
   uint64_t pos_;
 };
 
@@ -215,9 +225,11 @@ class WritableFileImpl : public WritableFile {
 
 class NoOpLogger : public Logger {
  public:
+  // 无日志文件操作
   void Logv(const char* format, std::va_list ap) override {}
 };
 
+// yszc:也是一个Env的一类实现,继承EnvWrapper是为了保证将一些非文件存储类的任务转发给base_env
 class InMemoryEnv : public EnvWrapper {
  public:
   explicit InMemoryEnv(Env* base_env) : EnvWrapper(base_env) {}
@@ -232,6 +244,7 @@ class InMemoryEnv : public EnvWrapper {
   Status NewSequentialFile(const std::string& fname,
                            SequentialFile** result) override {
     MutexLock lock(&mutex_);
+    // yszc:从内存中的file_map查找"文件"
     if (file_map_.find(fname) == file_map_.end()) {
       *result = nullptr;
       return Status::IOError(fname, "File not found");
@@ -259,12 +272,14 @@ class InMemoryEnv : public EnvWrapper {
     FileSystem::iterator it = file_map_.find(fname);
 
     FileState* file;
+    // 找不到文件就在f_map中新建一个
     if (it == file_map_.end()) {
       // File is not currently open.
       file = new FileState();
-      file->Ref();
+      file->Ref(); // 手动添加引用计数
       file_map_[fname] = file;
     } else {
+      // 否则清空当前文件
       file = it->second;
       file->Truncate();
     }
@@ -299,6 +314,7 @@ class InMemoryEnv : public EnvWrapper {
     for (const auto& kvp : file_map_) {
       const std::string& filename = kvp.first;
 
+      // 使用基于字符串匹配的方式查找目录下的文件
       if (filename.size() >= dir.size() + 1 && filename[dir.size()] == '/' &&
           Slice(filename).starts_with(Slice(dir))) {
         result->push_back(filename.substr(dir.size() + 1));
@@ -380,6 +396,7 @@ class InMemoryEnv : public EnvWrapper {
   typedef std::map<std::string, FileState*> FileSystem;
 
   port::Mutex mutex_;
+  // yszc: 使用map来表示一个简单的内存文件系统
   FileSystem file_map_ GUARDED_BY(mutex_);
 };
 

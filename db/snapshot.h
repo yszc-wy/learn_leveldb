@@ -53,6 +53,7 @@ class SnapshotList {
     return head_.prev_;
   }
 
+  // yszc:直接在链表类中提供生成成员的New函数,创建Snapshot并添加到链表中
   // Creates a SnapshotImpl and appends it to the end of the list.
   SnapshotImpl* New(SequenceNumber sequence_number) {
     assert(empty() || newest()->sequence_number_ <= sequence_number);

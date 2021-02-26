@@ -5,6 +5,7 @@
 #ifndef STORAGE_LEVELDB_UTIL_MUTEXLOCK_H_
 #define STORAGE_LEVELDB_UTIL_MUTEXLOCK_H_
 
+// yszc: 这里没有将mutex和mutexlock一起定义,因为mutex的实现是因平台而异的,mutexlock在mutex的基础上可以跨平台
 #include "port/port.h"
 #include "port/thread_annotations.h"
 
